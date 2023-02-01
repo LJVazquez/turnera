@@ -1,6 +1,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const dayjs = require('dayjs');
+const open = require('open');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
 dayjs.extend(customParseFormat);
 
@@ -21,12 +22,12 @@ const getToken = async (dni, password) => {
 };
 
 const getAppointmentsAvailable = async (
-	date,
+	sinceDate,
 	idGrupoMedico,
 	idObraSocial,
 	token
 ) => {
-	const formattedDate = dayjs(date).format('YYYY-MM-DD');
+	const formattedDate = dayjs(sinceDate).format('YYYY-MM-DD');
 	const url = 'https://wsportal2023.dim.com.ar/api/v1/estudios/turnos';
 	const data = {
 		fechaDesde: formattedDate,
@@ -49,13 +50,34 @@ const getAppointmentsAvailable = async (
 	}
 };
 
+const getTestiAppointmentsAvailable = async (date, token) => {
+	const formattedDate = dayjs(date).format('YYYY-MM-DD');
+	const urlTestificacion = `https://wsportal2023.dim.com.ar/api/v1/consulta_medica/turnosDisponibles/ALE/TESTI/${formattedDate}/false/false/`;
+
+	console.log('formattedDate', formattedDate);
+	const config = {
+		headers: {
+			Authorization: `Bearer ${token}`,
+			'Content-Type': 'application/json',
+		},
+	};
+
+	try {
+		const res = await axios.get(urlTestificacion, config);
+		console.log(res.data);
+		return res.data.turnos;
+	} catch (error) {
+		console.error('e.message', error.message);
+	}
+};
+
 const main = async () => {
 	const today = new Date();
 	const dni = parseInt(process.env.DNI);
 	const password = parseInt(process.env.PASS);
-	const idGrupoMedico = 31; //31 alergista 8 dermato
+	const idGrupoMedico = 7; //31 alergista 8 dermato 12 endocrinologo 7 clinica
 	const token = await getToken(dni, password);
-	const searchUpToDays = 30;
+	const searchUpToDays = 60;
 
 	const appointments = await getAppointmentsAvailable(
 		today,
@@ -63,6 +85,8 @@ const main = async () => {
 		'SMG',
 		token
 	);
+
+	// const appointments = await getTestiAppointmentsAvailable('2023-03-16', token);
 
 	const formattedAppointments = appointments.map((appointment) => {
 		return {
@@ -81,7 +105,18 @@ const main = async () => {
 		return diff <= searchUpToDays;
 	});
 
-	console.log(filteredAppointments);
+	return filteredAppointments;
 };
+
+const interval = setInterval(async () => {
+	const appointments = await main();
+	console.info('Buscando turnos...');
+
+	if (appointments.length > 0) {
+		console.info('Turnos encontrados');
+		open('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+		clearInterval(interval);
+	}
+}, 5000);
 
 main();
